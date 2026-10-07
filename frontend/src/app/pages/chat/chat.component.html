@@ -1,89 +1,263 @@
-<!-- <div class="chat-layout"> -->
-<div class="chat-layout" [class.chat-open]="selected()">
-  <aside class="sidebar">
-    <div class="sidebar-top">
-      <strong>{{ me?.username }}</strong>
-      <button class="link-btn" (click)="logout()">Logout</button>
+<div class="relative flex h-dvh w-full overflow-hidden bg-slate-100 text-slate-800 selection:bg-indigo-500 selection:text-white dark:bg-slate-900 dark:text-slate-100">
+  <!-- SIDEBAR -->
+  <aside
+    class="w-full flex-col border-slate-200 bg-white md:flex md:w-80 md:border-r lg:w-96 dark:border-slate-700 dark:bg-slate-800"
+    [class.flex]="!selected()"
+    [class.hidden]="selected()"
+  >
+    <!-- Sidebar header -->
+    <div class="flex items-center justify-between gap-2 border-b border-slate-200 p-4 dark:border-slate-700">
+      <div class="flex min-w-0 items-center gap-3">
+        <div
+          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full font-semibold text-white ring-2 ring-indigo-500/30"
+          [style.background]="avatarColor(me?.username)"
+        >{{ initials(me?.username) }}</div>
+        <div class="min-w-0">
+          <h2 class="truncate text-base leading-tight font-bold text-slate-900 dark:text-white">{{ me?.username }}</h2>
+          <p class="truncate text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ me?.email }}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button type="button" (click)="toggleDarkMode()" [title]="darkMode() ? 'Light mode' : 'Dark mode'"
+          class="rounded-xl p-2 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-700">
+          <i class="fa-solid" [class.fa-moon]="!darkMode()" [class.fa-sun]="darkMode()"></i>
+        </button>
+        <button type="button" (click)="logout()" title="Logout"
+          class="rounded-xl p-2 text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-900/30">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
     </div>
 
-    <h4>People</h4>
-    @for (u of users(); track u._id) {
-      <div class="user-item" [class.active]="selected()?._id === u._id" (click)="selectUser(u)">
-        <span>{{ u.username }}</span>
-        @if (unread()[u._id]) {
-          <span class="badge">{{ unread()[u._id] }}</span>
-        }
+    <!-- Search & tabs -->
+    <div class="space-y-3 p-4">
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute top-3 left-3.5 text-sm text-slate-400"></i>
+        <input type="text" placeholder="Search people..." [ngModel]="search()" (ngModelChange)="search.set($event)"
+          class="w-full rounded-xl border-none bg-slate-100 py-2.5 pr-4 pl-10 text-sm text-slate-800 placeholder-slate-400 outline-none transition focus:ring-2 focus:ring-indigo-500 dark:bg-slate-700/60 dark:text-slate-100" />
       </div>
-    } @empty {
-      <p class="hint">No other users yet. Register one more!</p>
-    }
+      <div class="flex gap-2 text-xs font-semibold">
+        <button type="button" (click)="tab.set('all')" class="flex-1 rounded-lg py-1.5 transition"
+          [class]="tab() === 'all' ? activeTabClass : tabClass">All Chats</button>
+        <button type="button" (click)="tab.set('unread')" class="flex-1 rounded-lg py-1.5 transition"
+          [class]="tab() === 'unread' ? activeTabClass : tabClass">
+          Unread
+          @if (totalUnread()) {
+            <span class="ml-1 rounded-full bg-indigo-500 px-1.5 text-[10px] text-white">{{ totalUnread() }}</span>
+          }
+        </button>
+      </div>
+    </div>
+
+    <!-- Contact list -->
+    <div class="flex-1 space-y-1 overflow-y-auto px-2">
+      @for (u of filteredUsers(); track u._id) {
+        <div (click)="selectUser(u)"
+          class="flex cursor-pointer items-center justify-between rounded-2xl border p-3 transition"
+          [class]="selected()?._id === u._id
+            ? 'border-indigo-500/20 bg-indigo-50 dark:bg-indigo-950/50'
+            : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-700/50'">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-semibold text-white"
+              [style.background]="avatarColor(u.username)">{{ initials(u.username) }}</div>
+            <div class="min-w-0">
+              <h4 class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ u.username }}</h4>
+              <p class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{{ lastMessagePreview(u) }}</p>
+            </div>
+          </div>
+          <div class="ml-2 flex shrink-0 flex-col items-end gap-1">
+            @if (lastMessages()[u._id]; as last) {
+              <span class="text-[10px] text-slate-400">{{ last.createdAt | date: 'shortTime' }}</span>
+            }
+            @if (unread()[u._id]) {
+              <span class="rounded-full bg-indigo-600 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">{{ unread()[u._id] }}</span>
+            }
+          </div>
+        </div>
+      } @empty {
+        <div class="p-6 text-center text-sm text-slate-400">
+          {{ users().length ? 'No conversations found' : 'No other users yet. Register one more!' }}
+        </div>
+      }
+    </div>
+
+    <div class="border-t border-slate-200 p-3 text-center text-xs text-slate-400 dark:border-slate-700">
+      Real-time messaging &bull; Socket.IO
+    </div>
   </aside>
 
-  <section class="chat-panel">
+  <!-- MAIN CHAT AREA -->
+  <main class="relative h-full min-w-0 flex-1 flex-col overflow-hidden bg-slate-50 md:flex dark:bg-slate-950"
+    [class.flex]="selected()" [class.hidden]="!selected()">
     @if (selected(); as other) {
-      <!-- <div class="chat-header">{{ other.username }}</div> -->
-      <div class="chat-header">
-        <button type="button" class="back-btn" (click)="back()">←</button>
-        <span>{{ other.username }}</span>
-      </div>
+      <!-- Chat header -->
+      <header class="z-10 flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white/80 px-4 backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/80">
+        <div class="flex min-w-0 items-center gap-3">
+          <button type="button" (click)="back()" title="Back"
+            class="rounded-xl p-2 text-slate-600 hover:bg-slate-100 md:hidden dark:text-slate-300 dark:hover:bg-slate-800">
+            <i class="fa-solid fa-arrow-left text-lg"></i>
+          </button>
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl font-semibold text-white ring-2 ring-indigo-500/30"
+            [style.background]="avatarColor(other.username)">{{ initials(other.username) }}</div>
+          <div class="min-w-0">
+            <h3 class="truncate text-base font-bold text-slate-900 dark:text-white">{{ other.username }}</h3>
+            <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ other.email }}</p>
+          </div>
+        </div>
+        <button type="button" (click)="infoOpen.set(!infoOpen())" title="Contact info"
+          class="rounded-xl p-2.5 text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+          <i class="fa-solid fa-circle-info text-sm"></i>
+        </button>
+      </header>
 
-      <div class="messages">
+      <!-- Messages -->
+      <div #msgBox class="flex flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-6">
         @for (m of messages(); track m._id) {
-          <div class="bubble" [class.mine]="isMine(m)">
-            @if (m.type === 'text') {
-              <div>{{ m.text }}</div>
-            } @else if (m.type === 'audio') {
-              <!-- <audio controls [src]="fileSrc(m)"></audio> -->
-               <audio controls preload="metadata" [src]="fileSrc(m)" (loadedmetadata)="fixDuration($event)"></audio>
-            } @else {
-              <!-- <video controls [src]="fileSrc(m)" class="chat-video"></video> -->
-               <video controls preload="metadata" [src]="fileSrc(m)" (loadedmetadata)="fixDuration($event)" class="chat-video"></video>
-            }
-            <small>{{ m.createdAt | date: 'short' }}</small>
+          <div class="flex" [class.justify-end]="isMine(m)" [class.justify-start]="!isMine(m)">
+            <div class="flex max-w-[85%] flex-col sm:max-w-md" [class.items-end]="isMine(m)" [class.items-start]="!isMine(m)">
+              <div class="rounded-2xl [overflow-wrap:anywhere]"
+                [class]="(isMine(m)
+                  ? 'rounded-tr-none bg-indigo-600 text-white'
+                  : 'rounded-tl-none border border-slate-200 bg-white text-slate-800 shadow-sm dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-100')
+                  + (m.type === 'text' ? ' p-3.5' : ' p-2')">
+                @if (m.type === 'text') {
+                  <p class="text-sm leading-relaxed">{{ m.text }}</p>
+                } @else if (m.type === 'audio') {
+                  <audio controls preload="metadata" [src]="fileSrc(m)" (loadedmetadata)="fixDuration($event)"
+                    class="block h-10 w-64 max-w-full"></audio>
+                } @else {
+                  <video controls preload="metadata" [src]="fileSrc(m)" (loadedmetadata)="fixDuration($event)"
+                    class="block w-80 max-w-full rounded-xl bg-black"></video>
+                }
+              </div>
+              <div class="mt-1 flex items-center gap-1 px-1">
+                <span class="text-[10px] text-slate-400">{{ m.createdAt | date: 'short' }}</span>
+                @if (isMine(m)) {
+                  <i class="fa-solid fa-check-double text-[10px] text-indigo-500"></i>
+                }
+              </div>
+            </div>
           </div>
         } @empty {
-          <p class="hint">No messages yet. Say hi 👋</p>
+          <div class="m-auto text-center text-slate-400">
+            <i class="fa-regular fa-comments text-5xl opacity-50"></i>
+            <p class="mt-3 text-sm">No messages yet. Say hi 👋</p>
+          </div>
         }
       </div>
 
-      <video #preview class="preview" [hidden]="recording() !== 'video'"></video>
+      <video #preview class="mx-auto mb-2 block w-56 rounded-2xl bg-black shadow-xl" [hidden]="recording() !== 'video'"></video>
 
-      <!-- @if (errorMsg()) {
-        <p class="error pad">{{ errorMsg() }}</p>
-      }
-      @if (uploading()) {
-        <p class="hint pad">Uploading...</p>
-      } -->
-
-      <div class="status-line">
-        @if (uploading()) {
-          <span class="hint">Uploading...</span>
-        } @else if (errorMsg()) {
-          <span class="error">{{ errorMsg() }}</span>
+      <!-- Composer -->
+      <footer class="relative shrink-0 border-t border-slate-200 bg-white p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4 dark:border-slate-700 dark:bg-slate-900">
+        @if (uploading() || errorMsg()) {
+          <div class="mx-auto mb-2 max-w-5xl text-[13px]">
+            @if (uploading()) {
+              <span class="text-slate-500"><i class="fa-solid fa-spinner fa-spin"></i> Uploading...</span>
+            } @else {
+              <span class="text-rose-500">{{ errorMsg() }}</span>
+            }
+          </div>
         }
-      </div>
 
-      @if (recording()) {
-        <div class="recording-bar">
-          <span class="dot"></span>
-          <span>Recording {{ recording() }}...</span>
-          <button type="button" (click)="stopRecording(true)">Stop &amp; send</button>
-          <button type="button" class="cancel" (click)="stopRecording(false)">Cancel</button>
-        </div>
-      } @else {
-        <form class="send-box" (ngSubmit)="send()">
-          <input name="text" [(ngModel)]="newText" placeholder="Type a message..." autocomplete="off" />
-          <button type="submit">Send</button>
-          <button type="button" class="icon-btn" title="Record audio" (click)="startRecording('audio')">🎤</button>
-          <button type="button" class="icon-btn" title="Record video" (click)="startRecording('video')">🎥</button>
-          <label class="icon-btn" title="Attach an audio/video file">
-            📎
-            <input type="file" accept="audio/*,video/*" hidden (change)="onFilePicked($event)" />
-          </label>
-        </form>
-      }
+        @if (emojiOpen()) {
+          <div class="absolute bottom-20 left-4 z-30 grid grid-cols-6 gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+            @for (e of emojis; track e) {
+              <button type="button" (click)="insertEmoji(e)" class="rounded-lg p-2 text-xl hover:bg-slate-100 dark:hover:bg-slate-700">{{ e }}</button>
+            }
+          </div>
+        }
+
+        @if (recording()) {
+          <div class="mx-auto flex max-w-5xl items-center gap-3 text-sm font-medium">
+            <span class="h-2.5 w-2.5 animate-pulse rounded-full bg-rose-500"></span>
+            <span class="flex-1">Recording {{ recording() }}...</span>
+            <button type="button" (click)="stopRecording(false)"
+              class="rounded-2xl border border-slate-200 px-4 py-2.5 transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">Cancel</button>
+            <button type="button" (click)="stopRecording(true)"
+              class="flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-2.5 font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-indigo-500 active:scale-95">
+              <span>Stop &amp; send</span><i class="fa-solid fa-paper-plane text-xs"></i>
+            </button>
+          </div>
+        } @else {
+          <form (ngSubmit)="send()" class="mx-auto flex max-w-5xl items-center gap-1 sm:gap-2">
+            <!-- Attachment menu -->
+            <div class="relative">
+              <button type="button" title="Attach file" (click)="attachOpen.set(!attachOpen()); emojiOpen.set(false)"
+                class="rounded-xl p-3 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800">
+                <i class="fa-solid fa-paperclip text-lg"></i>
+              </button>
+              @if (attachOpen()) {
+                <div class="absolute bottom-14 left-0 z-30 w-52 space-y-1 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                  <label class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700">
+                    <i class="fa-solid fa-file-audio w-5 text-indigo-500"></i>
+                    <span>Audio / Video file</span>
+                    <input type="file" accept="audio/*,video/*" hidden (change)="onFilePicked($event)" />
+                  </label>
+                  <button type="button" (click)="attachOpen.set(false); startRecording('video')"
+                    class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700">
+                    <i class="fa-solid fa-video w-5 text-emerald-500"></i>
+                    <span>Record video</span>
+                  </button>
+                </div>
+              }
+            </div>
+
+            <button type="button" title="Emoji" (click)="emojiOpen.set(!emojiOpen()); attachOpen.set(false)"
+              class="hidden rounded-xl p-3 text-slate-500 transition hover:bg-slate-100 sm:block dark:hover:bg-slate-800">
+              <i class="fa-regular fa-face-smile text-lg"></i>
+            </button>
+
+            <input #textInput name="text" [(ngModel)]="newText" placeholder="Type a message..." autocomplete="off"
+              class="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-base text-slate-800 placeholder-slate-400 outline-none transition focus:ring-2 focus:ring-indigo-500 sm:text-sm dark:border-slate-700/80 dark:bg-slate-800/80 dark:text-slate-100" />
+
+            <button type="button" title="Voice note" (click)="startRecording('audio')"
+              class="rounded-xl p-3 text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800">
+              <i class="fa-solid fa-microphone text-lg"></i>
+            </button>
+
+            <button type="submit"
+              class="flex shrink-0 items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-indigo-500 active:scale-95 sm:px-5">
+              <span class="hidden sm:inline">Send</span>
+              <i class="fa-solid fa-paper-plane text-xs"></i>
+            </button>
+          </form>
+        }
+      </footer>
     } @else {
-      <p class="hint center">Pick someone from the list to start chatting</p>
+      <div class="m-auto text-center text-slate-400">
+        <i class="fa-regular fa-comments text-5xl opacity-50"></i>
+        <p class="mt-3 text-sm">Pick someone from the list to start chatting</p>
+      </div>
     }
-  </section>
+  </main>
+
+  <!-- INFO PANEL (slide-over) -->
+  @if (selected(); as other) {
+    <aside class="absolute inset-y-0 right-0 z-20 flex w-80 max-w-full flex-col border-l border-slate-200 bg-white shadow-2xl transition-transform duration-300 dark:border-slate-700 dark:bg-slate-800"
+      [class.translate-x-full]="!infoOpen()" [class.invisible]="!infoOpen()">
+      <div class="flex items-center justify-between border-b border-slate-200 p-4 dark:border-slate-700">
+        <h4 class="font-bold text-slate-900 dark:text-white">Profile Details</h4>
+        <button type="button" (click)="infoOpen.set(false)"
+          class="rounded-xl p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-6 text-center">
+        <div class="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-3xl text-3xl font-semibold text-white shadow-lg"
+          [style.background]="avatarColor(other.username)">{{ initials(other.username) }}</div>
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white">{{ other.username }}</h3>
+        <div class="mt-6 space-y-4 border-t border-slate-200 pt-4 text-left dark:border-slate-700">
+          <div>
+            <span class="text-[11px] font-bold tracking-wider text-slate-400 uppercase">Email Address</span>
+            <p class="mt-0.5 text-sm font-medium break-all text-slate-800 dark:text-slate-200">{{ other.email }}</p>
+          </div>
+          <div>
+            <span class="text-[11px] font-bold tracking-wider text-slate-400 uppercase">Messages</span>
+            <p class="mt-0.5 text-sm font-medium text-slate-800 dark:text-slate-200">{{ messages().length }} in this conversation</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  }
 </div>

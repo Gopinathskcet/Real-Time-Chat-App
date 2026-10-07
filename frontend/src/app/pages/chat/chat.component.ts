@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, effect, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -19,7 +19,27 @@ export class ChatComponent implements OnInit, OnDestroy {
   selected = signal<ChatUser | null>(null);
   messages = signal<Message[]>([]);
   unread = signal<Record<string, number>>({});
+  lastMessages = signal<Record<string, Message>>({});
   newText = '';
+
+  search = signal('');
+  tab = signal<'all' | 'unread'>('all');
+  darkMode = signal(localStorage.getItem('theme') === 'dark');
+  infoOpen = signal(false);
+  emojiOpen = signal(false);
+  attachOpen = signal(false);
+  tabClass = 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+  activeTabClass = 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400';
+  emojis = ['😊', '😂', '❤️', '👍', '🔥', '🎉', '✨', '🚀', '👏', '😎', '💡', '🙏'];
+
+  totalUnread = computed(() => Object.values(this.unread()).reduce((sum, n) => sum + n, 0));
+  filteredUsers = computed(() => {
+    const q = this.search().trim().toLowerCase();
+    return this.users().filter((u) => {
+      if (this.tab() === 'unread' && !this.unread()[u._id]) return false;
+      return !q || u.username.toLowerCase().includes(q);
+    });
+  });
 
   recording = signal<'audio' | 'video' | null>(null);
   uploading = signal(false);
@@ -27,6 +47,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   @ViewChild('preview') preview?: ElementRef<HTMLVideoElement>;
   @ViewChild('msgBox') msgBox?: ElementRef<HTMLDivElement>;
+  @ViewChild('textInput') textInput?: ElementRef<HTMLInputElement>;
 
   private mediaRecorder?: MediaRecorder;
   private stream?: MediaStream;
@@ -42,6 +63,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     private router: Router
   ) {
     this.me = this.auth.getUser();
+    this.applyTheme();
     effect(() => {
       this.messages(); // re-run whenever the message list changes
       setTimeout(() => {
@@ -57,6 +79,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     this.socket.connect();
     this.sub = this.socket.newMessage$.subscribe((msg) => {
+      this.rememberLast(msg.sender, msg);
       if (this.selected()?._id === msg.sender) {
         this.messages.update((list) => [...list, msg]);
       } else {
@@ -75,10 +98,15 @@ export class ChatComponent implements OnInit, OnDestroy {
   selectUser(user: ChatUser) {
     this.stopRecording(false);
     this.errorMsg.set('');
+    this.emojiOpen.set(false);
+    this.attachOpen.set(false);
     this.selected.set(user);
     this.messages.set([]);
     this.unread.update((u) => ({ ...u, [user._id]: 0 }));
-    this.chat.getHistory(user._id).subscribe((list) => this.messages.set(list));
+    this.chat.getHistory(user._id).subscribe((list) => {
+      this.messages.set(list);
+      if (list.length) this.rememberLast(user._id, list[list.length - 1]);
+    });
   }
 
   send() {
@@ -86,8 +114,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     const text = this.newText.trim();
     if (!to || !text) return;
 
+    this.emojiOpen.set(false);
     this.chat.sendText(to._id, text).subscribe((msg) => {
       this.messages.update((list) => [...list, msg]);
+      this.rememberLast(to._id, msg);
       this.newText = '';
     });
   }
@@ -151,6 +181,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   // ---------- Uploading ----------
   onFilePicked(event: Event) {
+    this.attachOpen.set(false);
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (file) this.uploadFile(file, file.name);
@@ -167,6 +198,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.chat.sendMedia(to._id, file, filename).subscribe({
       next: (msg) => {
         this.messages.update((list) => [...list, msg]);
+        this.rememberLast(to._id, msg);
         this.uploading.set(false);
       },
       error: (err) => {
@@ -195,7 +227,49 @@ export class ChatComponent implements OnInit, OnDestroy {
   back() {
     this.stopRecording(false);
     this.errorMsg.set('');
+    this.infoOpen.set(false);
     this.selected.set(null);
+  }
+
+  // ---------- UI helpers ----------
+  insertEmoji(emoji: string) {
+    this.newText += emoji;
+    this.emojiOpen.set(false);
+    this.textInput?.nativeElement.focus();
+  }
+
+  toggleDarkMode() {
+    this.darkMode.update((d) => !d);
+    localStorage.setItem('theme', this.darkMode() ? 'dark' : 'light');
+    this.applyTheme();
+  }
+
+  private applyTheme() {
+    document.documentElement.classList.toggle('dark', this.darkMode());
+  }
+
+  private rememberLast(userId: string, msg: Message) {
+    this.lastMessages.update((m) => ({ ...m, [userId]: msg }));
+  }
+
+  lastMessagePreview(u: ChatUser) {
+    const last = this.lastMessages()[u._id];
+    if (!last) return u.email;
+    const prefix = this.isMine(last) ? 'You: ' : '';
+    if (last.type === 'audio') return prefix + '🎤 Voice note';
+    if (last.type === 'video') return prefix + '🎥 Video';
+    return prefix + last.text;
+  }
+
+  initials(name = '') {
+    return name.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  }
+
+  avatarColor(name = '') {
+    const colors = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#ef4444'];
+    let hash = 0;
+    for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+    return colors[Math.abs(hash) % colors.length];
   }
 
   logout() {
