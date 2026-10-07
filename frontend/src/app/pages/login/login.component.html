@@ -1,0 +1,27 @@
+<div class="auth-card">
+  <h2>Login</h2>
+
+  <form #f="ngForm" (ngSubmit)="onSubmit()">
+    <label>Email</label>
+    <input name="email" type="email" [(ngModel)]="email" required email #e="ngModel" />
+    @if (e.invalid && e.touched) {
+      <small class="error">Enter a valid email</small>
+    }
+
+    <label>Password</label>
+    <input name="password" type="password" [(ngModel)]="password" required #p="ngModel" />
+    @if (p.invalid && p.touched) {
+      <small class="error">Password is required</small>
+    }
+
+    <button type="submit" [disabled]="f.invalid || loading()">
+      {{ loading() ? 'Please wait...' : 'Login' }}
+    </button>
+  </form>
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
+
+  <p>New here? <a routerLink="/register">Create an account</a></p>
+</div>

@@ -1,0 +1,33 @@
+<div class="auth-card">
+  <h2>Create account</h2>
+
+  <form #f="ngForm" (ngSubmit)="onSubmit()">
+    <label>Username</label>
+    <input name="username" [(ngModel)]="username" required #u="ngModel" />
+    @if (u.invalid && u.touched) {
+      <small class="error">Username is required</small>
+    }
+
+    <label>Email</label>
+    <input name="email" type="email" [(ngModel)]="email" required email #e="ngModel" />
+    @if (e.invalid && e.touched) {
+      <small class="error">Enter a valid email</small>
+    }
+
+    <label>Password</label>
+    <input name="password" type="password" [(ngModel)]="password" required minlength="6" #p="ngModel" />
+    @if (p.invalid && p.touched) {
+      <small class="error">Password must be at least 6 characters</small>
+    }
+
+    <button type="submit" [disabled]="f.invalid || loading()">
+      {{ loading() ? 'Please wait...' : 'Register' }}
+    </button>
+  </form>
+
+  @if (errorMessage()) {
+    <p class="error">{{ errorMessage() }}</p>
+  }
+
+  <p>Already have an account? <a routerLink="/login">Login</a></p>
+</div>

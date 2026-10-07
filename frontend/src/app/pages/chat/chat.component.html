@@ -1,0 +1,89 @@
+<!-- <div class="chat-layout"> -->
+<div class="chat-layout" [class.chat-open]="selected()">
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <strong>{{ me?.username }}</strong>
+      <button class="link-btn" (click)="logout()">Logout</button>
+    </div>
+
+    <h4>People</h4>
+    @for (u of users(); track u._id) {
+      <div class="user-item" [class.active]="selected()?._id === u._id" (click)="selectUser(u)">
+        <span>{{ u.username }}</span>
+        @if (unread()[u._id]) {
+          <span class="badge">{{ unread()[u._id] }}</span>
+        }
+      </div>
+    } @empty {
+      <p class="hint">No other users yet. Register one more!</p>
+    }
+  </aside>
+
+  <section class="chat-panel">
+    @if (selected(); as other) {
+      <!-- <div class="chat-header">{{ other.username }}</div> -->
+      <div class="chat-header">
+        <button type="button" class="back-btn" (click)="back()">←</button>
+        <span>{{ other.username }}</span>
+      </div>
+
+      <div class="messages">
+        @for (m of messages(); track m._id) {
+          <div class="bubble" [class.mine]="isMine(m)">
+            @if (m.type === 'text') {
+              <div>{{ m.text }}</div>
+            } @else if (m.type === 'audio') {
+              <!-- <audio controls [src]="fileSrc(m)"></audio> -->
+               <audio controls preload="metadata" [src]="fileSrc(m)" (loadedmetadata)="fixDuration($event)"></audio>
+            } @else {
+              <!-- <video controls [src]="fileSrc(m)" class="chat-video"></video> -->
+               <video controls preload="metadata" [src]="fileSrc(m)" (loadedmetadata)="fixDuration($event)" class="chat-video"></video>
+            }
+            <small>{{ m.createdAt | date: 'short' }}</small>
+          </div>
+        } @empty {
+          <p class="hint">No messages yet. Say hi 👋</p>
+        }
+      </div>
+
+      <video #preview class="preview" [hidden]="recording() !== 'video'"></video>
+
+      <!-- @if (errorMsg()) {
+        <p class="error pad">{{ errorMsg() }}</p>
+      }
+      @if (uploading()) {
+        <p class="hint pad">Uploading...</p>
+      } -->
+
+      <div class="status-line">
+        @if (uploading()) {
+          <span class="hint">Uploading...</span>
+        } @else if (errorMsg()) {
+          <span class="error">{{ errorMsg() }}</span>
+        }
+      </div>
+
+      @if (recording()) {
+        <div class="recording-bar">
+          <span class="dot"></span>
+          <span>Recording {{ recording() }}...</span>
+          <button type="button" (click)="stopRecording(true)">Stop &amp; send</button>
+          <button type="button" class="cancel" (click)="stopRecording(false)">Cancel</button>
+        </div>
+      } @else {
+        <form class="send-box" (ngSubmit)="send()">
+          <input name="text" [(ngModel)]="newText" placeholder="Type a message..." autocomplete="off" />
+          <button type="submit">Send</button>
+          <button type="button" class="icon-btn" title="Record audio" (click)="startRecording('audio')">🎤</button>
+          <button type="button" class="icon-btn" title="Record video" (click)="startRecording('video')">🎥</button>
+          <label class="icon-btn" title="Attach an audio/video file">
+            📎
+            <input type="file" accept="audio/*,video/*" hidden (change)="onFilePicked($event)" />
+          </label>
+        </form>
+      }
+    } @else {
+      <p class="hint center">Pick someone from the list to start chatting</p>
+    }
+  </section>
+</div>
